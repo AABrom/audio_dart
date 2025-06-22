@@ -20,6 +20,8 @@ cd audio_dart
 flutter pub get
 flutter run -d chrome
 
+```
+
 ## 🎛️ Управление
 
 | Кнопка | Действие | Описание |
