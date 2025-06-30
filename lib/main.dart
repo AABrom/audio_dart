@@ -23,16 +23,19 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
   String _savedWords = '';
   List<String> _chunks = [];
 
+  // переменные управления записью и распознаванием речи
   bool _isRecording = false;
   bool _speechEnabled = false;
   bool _isEditing = false;
   bool _switchRecorder = true;
-
+  // переменные управления чанками:
+  
   Timer? _chunkTimer;
   final int chunkDuration = 30; // секунд
 
   @override
   void initState() {
+    //сам пакет надо однократно инициализировать при запуске страницы
     super.initState();
     _initSpeech();
   }
@@ -45,16 +48,17 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
   }
 
   void _onSpeechResult(SpeechRecognitionResult result) {
-  setState(() {
-    _lastWords = result.recognizedWords;
-    textToSpeechController.text =
-      _chunks.join(' ') + (_lastWords.isNotEmpty ? ' ' + _lastWords : '');
-  });
-}
-
+    //сохраняет результат распознавания и добавляет к чанку буфер новых (последних) слов
+    setState(() {
+      _lastWords = result.recognizedWords;
+      textToSpeechController.text =
+          _chunks.join(' ') + (_lastWords.isNotEmpty ? ' ' + _lastWords : '');
+    });
+  }
 
   void _onSpeechStatus(String status) {
-    // Если распознавание неожиданно остановилось — перезапустить, если нужно
+    // если распознавание неожиданно остановилось — перезапустить, если нужно
+    // тк есть платформенные ограничения, web автоматически останавливает голосовой ввод
     if (status == 'done' && _isRecording && !_isEditing) {
       Future.delayed(Duration(milliseconds: 300), () {
         if (!_speechToText.isListening && _isRecording && !_isEditing) {
@@ -65,33 +69,34 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
   }
 
   void _toggleEditing() async {
-  setState(() {
-    _isEditing = !_isEditing;
-  });
+    setState(() {
+      _isEditing = !_isEditing;
+    });
 
-  if (_isEditing) {
-    // Вход в режим редактирования
-    if (_speechToText.isListening) {
-      await _speechToText.stop();
-    }
-    _lastWords = ''; // Сбросить только временный буфер
-    // Не трогать _chunks и _savedWords!
-  } else {
-    // Выход из режима редактирования
-    // Обновить список чанков из текстового поля (если нужно)
-    final editedText = textToSpeechController.text.trim();
-    _chunks = editedText.isNotEmpty ? editedText.split(RegExp(r'\s+')) : [];
-    _lastWords = '';
-    if (_isRecording && _speechEnabled && !_speechToText.isListening) {
-      await _speechToText.listen(onResult: _onSpeechResult);
+    if (_isEditing) {
+      // Вход в режим редактирования
+      if (_speechToText.isListening) {
+        await _speechToText.stop();
+      }
+      _lastWords = ''; // Сбросить только временный буфер, но не трогать _chunks и _savedWords!
+      //если не сделать, последный чанк начинает дублировать и перезаписывать
+    } else {
+      // Выход из режима редактирования
+      // Обновить список чанков из текстового поля (если нужно)
+      final editedText = textToSpeechController.text.trim();
+      _chunks = editedText.isNotEmpty ? editedText.split(RegExp(r'\s+')) : [];
+      _lastWords = '';
+      if (_isRecording && _speechEnabled && !_speechToText.isListening) {
+        await _speechToText.listen(onResult: _onSpeechResult);
+      }
     }
   }
-}
-
 
   void _startChunking() {
+    //контролирует период записи чанков
     _chunkTimer?.cancel();
-    _chunkTimer = Timer.periodic(Duration(seconds: chunkDuration), (timer) async {
+    _chunkTimer =
+        Timer.periodic(Duration(seconds: chunkDuration), (timer) async {
       if (_speechToText.isListening && !_isEditing) {
         await _speechToText.stop();
         _saveCurrentChunk();
@@ -108,19 +113,18 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
     _chunkTimer = null;
     String allRecognizedText = _chunks.join(' ');
     print(allRecognizedText);
-
   }
 
   void _saveCurrentChunk() {
-  if (_lastWords.trim().isNotEmpty) {
-    _chunks.add(_lastWords.trim());
-    _lastWords = '';
+    if (_lastWords.trim().isNotEmpty) {
+      _chunks.add(_lastWords.trim());
+      _lastWords = '';
+    }
+    textToSpeechController.text = _chunks.join(' ');
   }
-  textToSpeechController.text = _chunks.join(' ');
-}
-
 
   Future<void> _startRecording() async {
+    //запись аудио в файл
     if (_switchRecorder) {
       await _audioRecorder.start(
         const RecordConfig(encoder: AudioEncoder.wav),
@@ -142,6 +146,7 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
   }
 
   Future<void> _stopRecording() async {
+    //остановка записи аудио и сохранение локально
     if (_switchRecorder) {
       final audioPath = await _audioRecorder.stop();
       _audioPath = audioPath;
@@ -166,7 +171,6 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
     });
   }
 
-
   @override
   void dispose() {
     _audioRecorder.dispose();
@@ -185,11 +189,12 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
               SizedBox(height: 10),
               if (_switchRecorder && _isRecording)
                 Text('Записываем аудио...')
-              else if (_isEditing) Text('Распознавание речи отключено'),
-          
+              else if (_isEditing)
+                Text('Распознавание речи отключено'),
               Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).colorScheme.primary),
+                  border:
+                      Border.all(color: Theme.of(context).colorScheme.primary),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 margin: EdgeInsets.all(20),
@@ -204,7 +209,10 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
                               _switchRecorder
                                   ? 'Сохранение включено'
                                   : 'Сохранение отключено',
-                              style: TextStyle(color: Theme.of(context).colorScheme.secondary, fontSize: 12),
+                              style: TextStyle(
+                                  color:
+                                      Theme.of(context).colorScheme.secondary,
+                                  fontSize: 12),
                             ),
                             value: _switchRecorder,
                             onChanged: (bool value) {
@@ -239,12 +247,15 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         CustomIconButton(
-                          onPressed: _isRecording ? _stopRecording : _startRecording,
-                          icon: _isRecording ? Icons.stop_circle : Icons.play_circle,
+                          onPressed:
+                              _isRecording ? _stopRecording : _startRecording,
+                          icon: _isRecording
+                              ? Icons.stop_circle
+                              : Icons.play_circle,
                           tooltipMessage: _isRecording
                               ? 'Завершить прослушивание'
                               : 'Подключиться к микрофону',
-                          iconSize : 40,
+                          iconSize: 40,
                         ),
                         SizedBox(width: 20),
                       ],
